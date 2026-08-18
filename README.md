@@ -20,6 +20,19 @@ This package includes a basic template for a racing game in Godot 4.6. Includes 
 | <kbd>W</kbd> | Accelerate/brake |
 | <kbd>S</kbd> | Brake/reverse |
 | <kbd>A</kbd> <kbd>D</kbd> | Steering |
+| <kbd>T</kbd> | Toggle self-driving (AUTO button on touch) |
+
+### Live debug channel
+
+While the app is running on the phone, a loopback-only TCP server (port 9999) lets you
+talk to it live from Termux, no rebuild needed. Commands: `state`, `auto on`, `auto off`,
+`reload_brain` (hot-swaps NN weights from `user://best_genome.tres`).
+
+```bash
+exec 3<>/dev/tcp/127.0.0.1/9999
+echo "state" >&3
+cat <&3
+```
 
 ### Instructions
 

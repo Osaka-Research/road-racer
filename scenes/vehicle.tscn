@@ -68,6 +68,31 @@ debug_shape_custom_color = Color(0.898039, 0, 0, 1)
 
 [node name="Container" type="Node3D" parent="." unique_id=546976745]
 
+[node name="AutoRay0" type="RayCast3D" parent="Container"]
+transform = Transform3D(0.5, 0, -0.866025, 0, 1, 0, 0.866025, 0, 0.5, -0.9, 0.4, 2.2)
+target_position = Vector3(0, 0, 10)
+hit_back_faces = false
+
+[node name="AutoRay1" type="RayCast3D" parent="Container"]
+transform = Transform3D(0.866025, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866025, -0.6, 0.4, 2.2)
+target_position = Vector3(0, 0, 10)
+hit_back_faces = false
+
+[node name="AutoRay2" type="RayCast3D" parent="Container"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 2.2)
+target_position = Vector3(0, 0, 10)
+hit_back_faces = false
+
+[node name="AutoRay3" type="RayCast3D" parent="Container"]
+transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, 0.6, 0.4, 2.2)
+target_position = Vector3(0, 0, 10)
+hit_back_faces = false
+
+[node name="AutoRay4" type="RayCast3D" parent="Container"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0.9, 0.4, 2.2)
+target_position = Vector3(0, 0, 10)
+hit_back_faces = false
+
 [node name="Model" parent="Container" unique_id=2133669704 instance=ExtResource("2_vuxys")]
 
 [node name="TrailLeft" type="GPUParticles3D" parent="Container" unique_id=1350774766]
@@ -104,6 +129,7 @@ stream = ExtResource("6_v3p7b")
 [node name="Sphere" type="RigidBody3D" parent="." unique_id=1368519146]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 collision_layer = 8
+collision_mask = 9
 mass = 1000.0
 physics_material_override = SubResource("PhysicsMaterial_eyo0u")
 gravity_scale = 1.5

@@ -5,6 +5,11 @@ class_name Vehicle extends Node3D
 @onready var sphere: RigidBody3D = $Sphere
 @onready var raycast: RayCast3D = $Ground
 
+@onready var auto_rays: Array[RayCast3D] = [
+	$Container/AutoRay0, $Container/AutoRay1, $Container/AutoRay2,
+	$Container/AutoRay3, $Container/AutoRay4,
+]
+
 # Vehicle elements
 
 @onready var vehicle_model = $Container
@@ -42,23 +47,64 @@ var prev_position: Vector3
 
 var calculated_lean: float
 
+@export var autopilot: bool = false
+var autopilot_brain: Genome = null
+var collision_count: int = 0
+
+@export var is_player: bool = false
+
+const AUTO_RAY_RANGE := 10.0
+
 # Public Functions
 
 func get_vehicle_position() -> Vector3: return vehicle_model.global_position
+func get_vehicle_basis() -> Basis: return vehicle_model.global_transform.basis
+
+func side_touching_wall() -> bool:
+	for r in auto_rays:
+		if r.is_colliding() and r.global_position.distance_to(r.get_collision_point()) < 1.8:
+			return true
+	return false
 
 # Functions
 
+func _ready():
+	add_to_group("all_vehicles")
+	if is_player:
+		add_to_group("player_vehicle")
+
+	if autopilot_brain == null:
+		if ResourceLoader.exists("user://best_genome.tres"):
+			autopilot_brain = load("user://best_genome.tres")
+		elif ResourceLoader.exists("res://ai/best_genome.tres"):
+			autopilot_brain = load("res://ai/best_genome.tres")
+
+const FALL_RESET_Y := -5.0
+const SPAWN_LOCAL_SPHERE_POS := Vector3(0, 0.5, 0)
+
 func _physics_process(delta):
+
+	# Safety net: driving off the paved cells into decoration-only area (or
+	# any other physics glitch) means no floor underneath -- freefall forever
+	# otherwise. Teleport back to this vehicle's own spawn point instead.
+	if sphere.position.y < FALL_RESET_Y:
+		sphere.position = SPAWN_LOCAL_SPHERE_POS
+		sphere.linear_velocity = Vector3.ZERO
+		sphere.angular_velocity = Vector3.ZERO
+		linear_speed = 0.0
+		acceleration = 0.0
+		angular_speed = 0.0
+		return
 
 	handle_input(delta)
 
 	var direction = sign(linear_speed)
 	if direction == 0: direction = sign(input.z) if abs(input.z) > 0.1 else 1
 
-	var steering_grip = clamp(abs(linear_speed), 0.2, 1.0)
+	var steering_grip = clamp(abs(linear_speed), 0.35, 1.0)
 
-	var target_angular = -input.x * steering_grip * 4 * direction
-	angular_speed = lerp(angular_speed, target_angular, delta * 4)
+	var target_angular = -input.x * steering_grip * 3.2 * direction
+	angular_speed = lerp(angular_speed, target_angular, delta * 5)
 
 	vehicle_model.rotate_y(angular_speed * delta)
 
@@ -112,11 +158,60 @@ func _physics_process(delta):
 
 func handle_input(delta):
 
+	if Input.is_action_just_pressed("auto"):
+		autopilot = !autopilot
+
 	if raycast.is_colliding():
-		input.x = Input.get_axis("left", "right")
-		input.z = Input.get_axis("back", "forward")
+		if autopilot:
+			handle_autopilot(delta)
+		else:
+			input.x = Input.get_axis("left", "right")
+			input.z = Input.get_axis("back", "forward")
 
 	sphere.angular_velocity += vehicle_model.get_global_transform().basis.x * (linear_speed * 100) * delta
+
+# Self-driving: neural net brain (trained via simulation, see scripts/ai/trainer.gd)
+# reads the 5-ray sensor fan + speed, outputs steer/throttle. Falls back to a dumb
+# wall-avoidance heuristic if no trained genome is loaded.
+
+func handle_autopilot(delta):
+
+	if autopilot_brain == null:
+		handle_autopilot_heuristic(delta)
+		return
+
+	var inputs := PackedFloat32Array()
+	inputs.resize(6)
+	for i in auto_rays.size():
+		var r = auto_rays[i]
+		var dist = AUTO_RAY_RANGE
+		if r.is_colliding():
+			dist = r.global_position.distance_to(r.get_collision_point())
+		inputs[i] = clamp(dist / AUTO_RAY_RANGE, 0.0, 1.0)
+	inputs[5] = clamp(linear_speed, -1.0, 1.0)
+
+	var out = autopilot_brain.forward(inputs)
+	input.x = lerp(input.x, clamp(out[0], -1.0, 1.0), delta * 8)
+	input.z = lerp(input.z, clamp(out[1], -1.0, 1.0), delta * 8)
+
+func handle_autopilot_heuristic(delta):
+
+	input.z = 1.0
+
+	var left = auto_rays[0]
+	var right = auto_rays[4]
+	var steer = 0.0
+
+	if left.is_colliding() and right.is_colliding():
+		var dist_left = left.global_position.distance_to(left.get_collision_point())
+		var dist_right = right.global_position.distance_to(right.get_collision_point())
+		steer = 1.0 if dist_left < dist_right else -1.0
+	elif left.is_colliding():
+		steer = 1.0
+	elif right.is_colliding():
+		steer = -1.0
+
+	input.x = lerp(input.x, steer, delta * 6)
 
 func effect_body(delta):
 	
@@ -190,6 +285,8 @@ func _on_sphere_body_entered(_body: Node) -> void:
 	
 	if vehicle_body == null: return
 	
+	collision_count += 1
+
 	if not impact_sound.playing:
 		var impact_velocity := absf(linear_velocity.dot(vehicle_body.global_basis.z))
 		impact_sound.volume_db = clampf(remap(impact_velocity, 0.0, 6.0, -20.0, 0.0), -20.0, 0.0)
