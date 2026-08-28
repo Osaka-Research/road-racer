@@ -53,12 +53,20 @@ var collision_count: int = 0
 
 @export var is_player: bool = false
 
+var boost_multiplier: float = 1.0
+var boost_timer: float = 0.0
+
 const AUTO_RAY_RANGE := 10.0
 
 # Public Functions
 
 func get_vehicle_position() -> Vector3: return vehicle_model.global_position
 func get_vehicle_basis() -> Basis: return vehicle_model.global_transform.basis
+
+# Called by powerup.gd when this vehicle's Sphere drives through a boost pad.
+func apply_speed_boost(multiplier: float, duration: float) -> void:
+	boost_multiplier = multiplier
+	boost_timer = duration
 
 func side_touching_wall() -> bool:
 	for r in auto_rays:
@@ -98,6 +106,12 @@ func _physics_process(delta):
 
 	handle_input(delta)
 
+	if boost_timer > 0.0:
+		boost_timer -= delta
+		if boost_timer <= 0.0:
+			boost_timer = 0.0
+			boost_multiplier = 1.0
+
 	var direction = sign(linear_speed)
 	if direction == 0: direction = sign(input.z) if abs(input.z) > 0.1 else 1
 
@@ -125,7 +139,7 @@ func _physics_process(delta):
 
 	colliding = raycast.is_colliding()
 
-	var target_speed = input.z
+	var target_speed = input.z * (boost_multiplier if input.z > 0 else 1.0)
 
 	if (target_speed < 0 and linear_speed > 0.01):
 		linear_speed = lerp(linear_speed, 0.0, delta * 8)
