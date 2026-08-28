@@ -93,10 +93,20 @@ func _vehicles_json() -> String:
 	for node in get_tree().get_nodes_in_group("all_vehicles"):
 		var v: Vehicle = node
 		var pos: Vector3 = v.get_vehicle_position()
+		var rays := []
+		for r in v.auto_rays:
+			rays.append(r.global_position.distance_to(r.get_collision_point()) if r.is_colliding() else -1.0)
 		list.append({
 			"name": v.name,
 			"is_player": v.is_player,
 			"position": [pos.x, pos.y, pos.z],
+			"speed": v.linear_speed,
+			"input": [v.input.x, v.input.z],
+			"boost": v.boost_multiplier,
+			"autopilot": v.autopilot,
+			"colliding": v.colliding,
+			"collisions": v.collision_count,
+			"rays": rays,
 		})
 	return JSON.stringify(list)
 
