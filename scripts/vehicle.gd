@@ -158,7 +158,12 @@ func _physics_process(delta):
 
 func handle_input(delta):
 
-	if Input.is_action_just_pressed("auto"):
+	# "auto" is a shared global input action -- every vehicle's handle_input()
+	# runs each physics frame and would otherwise all see the same button
+	# press and toggle their own autopilot together. Only the player's own
+	# vehicle should react to it; the AI cars keep whatever autopilot state
+	# they were spawned with.
+	if is_player and Input.is_action_just_pressed("auto"):
 		autopilot = !autopilot
 
 	if raycast.is_colliding():
