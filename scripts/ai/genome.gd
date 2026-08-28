@@ -2,7 +2,7 @@ class_name Genome extends Resource
 
 # Tiny feedforward NN: inputs -> hidden (tanh) -> outputs (tanh)
 
-const INPUTS := 6
+const INPUTS := 9
 const HIDDEN := 8
 const OUTPUTS := 2
 

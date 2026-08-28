@@ -13,6 +13,7 @@ const VehicleScene := preload("res://scenes/vehicle.tscn")
 @export var mutation_rate := 0.12
 @export var mutation_strength := 0.5
 @export var elite_count := 3
+@export var overtake_bonus := 2.0  # fitness per rival this genome out-progressed
 
 var population: Array[Genome] = []
 var vehicles: Array[Vehicle] = []
@@ -95,6 +96,18 @@ func _end_generation() -> void:
 	var fitness: Array[float] = []
 	for i in population_size:
 		fitness.append(progress[i] - penalty[i])
+
+	# Competitive bonus: reward out-progressing rivals, not just solo distance --
+	# the population races the same track at the same time (see _spawn_generation),
+	# and each vehicle can now sense the nearest rival (see Vehicle.handle_autopilot),
+	# so this gives evolution actual pressure to navigate around a rival ahead
+	# instead of just being ignored as fitness-irrelevant.
+	for i in population_size:
+		var beaten := 0
+		for j in population_size:
+			if j != i and progress[i] > progress[j]:
+				beaten += 1
+		fitness[i] += beaten * overtake_bonus
 
 	var order := range(population_size)
 	order.sort_custom(func(a, b): return fitness[a] > fitness[b])

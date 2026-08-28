@@ -87,6 +87,13 @@ func _ready():
 		elif ResourceLoader.exists("res://ai/best_genome.tres"):
 			autopilot_brain = load("res://ai/best_genome.tres")
 
+		# A genome saved under a previous network shape (different input/hidden
+		# count) has wrongly-sized weight arrays -- forward() would index out of
+		# bounds. Discard it and fall back to the heuristic driver instead of
+		# crashing.
+		if autopilot_brain != null and autopilot_brain.w1.size() != Genome.INPUTS * Genome.HIDDEN:
+			autopilot_brain = null
+
 const FALL_RESET_Y := -5.0
 const SPAWN_LOCAL_SPHERE_POS := Vector3(0, 0.5, 0)
 
@@ -190,8 +197,10 @@ func handle_input(delta):
 	sphere.angular_velocity += vehicle_model.get_global_transform().basis.x * (linear_speed * 100) * delta
 
 # Self-driving: neural net brain (trained via simulation, see scripts/ai/trainer.gd)
-# reads the 5-ray sensor fan + speed, outputs steer/throttle. Falls back to a dumb
-# wall-avoidance heuristic if no trained genome is loaded.
+# reads the 5-ray sensor fan + speed + nearest-rival info, outputs steer/throttle.
+# Falls back to a dumb wall-avoidance heuristic if no trained genome is loaded.
+
+const OPP_RANGE := 15.0
 
 func handle_autopilot(delta):
 
@@ -200,7 +209,7 @@ func handle_autopilot(delta):
 		return
 
 	var inputs := PackedFloat32Array()
-	inputs.resize(6)
+	inputs.resize(Genome.INPUTS)
 	for i in auto_rays.size():
 		var r = auto_rays[i]
 		var dist = AUTO_RAY_RANGE
@@ -209,9 +218,40 @@ func handle_autopilot(delta):
 		inputs[i] = clamp(dist / AUTO_RAY_RANGE, 0.0, 1.0)
 	inputs[5] = clamp(linear_speed, -1.0, 1.0)
 
+	var opp := _nearest_opponent_info()
+	inputs[6] = opp.x  # forward offset to nearest rival, [-1,1] (1 = none nearby/far ahead)
+	inputs[7] = opp.y  # lateral offset to nearest rival, [-1,1] (positive = to the right)
+	inputs[8] = opp.z  # nearest rival's speed relative to ours, [-1,1]
+
 	var out = autopilot_brain.forward(inputs)
 	input.x = lerp(input.x, clamp(out[0], -1.0, 1.0), delta * 8)
 	input.z = lerp(input.z, clamp(out[1], -1.0, 1.0), delta * 8)
+
+# Nearest other vehicle (any car in "all_vehicles"), expressed in this car's
+# own local frame so the network can learn "rival ahead in my lane" vs.
+# "rival off to the side" regardless of world orientation. Vector3(forward,
+# lateral, relative_speed); a neutral/no-threat reading when nothing's close.
+func _nearest_opponent_info() -> Vector3:
+	var nearest_dist := INF
+	var nearest_local := Vector3.ZERO
+	var nearest_rel_speed := 0.0
+	for v in get_tree().get_nodes_in_group("all_vehicles"):
+		if v == self:
+			continue
+		var d = v.get_vehicle_position().distance_to(get_vehicle_position())
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_local = vehicle_model.to_local(v.get_vehicle_position())
+			nearest_rel_speed = v.linear_speed - linear_speed
+
+	if nearest_dist > OPP_RANGE:
+		return Vector3(1.0, 0.0, 0.0)
+
+	return Vector3(
+		clamp(nearest_local.z / OPP_RANGE, -1.0, 1.0),
+		clamp(nearest_local.x / OPP_RANGE, -1.0, 1.0),
+		clamp(nearest_rel_speed, -1.0, 1.0)
+	)
 
 func handle_autopilot_heuristic(delta):
 
