@@ -13,7 +13,7 @@ const VehicleScene := preload("res://scenes/vehicle.tscn")
 @export var mutation_rate := 0.12
 @export var mutation_strength := 0.5
 @export var elite_count := 6
-@export var overtake_bonus := 2.0  # fitness per rival this genome out-progressed
+@export var overtake_bonus := 6.0  # max fitness for beating every rival -- secondary to progress, not additive per-rival
 @export var reverse_penalty := 4.0  # per second spent with negative linear_speed
 
 var population: Array[Genome] = []
@@ -112,12 +112,20 @@ func _end_generation() -> void:
 	# and each vehicle can now sense the nearest rival (see Vehicle.handle_autopilot),
 	# so this gives evolution actual pressure to navigate around a rival ahead
 	# instead of just being ignored as fitness-irrelevant.
+	# Bug: this used to be `beaten * overtake_bonus` with no normalization --
+	# at population_size=24 that let a genome earn up to 23 * overtake_bonus
+	# just for out-ranking a mediocre pack, which dwarfed the ~17-33 typical
+	# progress score. Evolution chased relative rank over a crowd of equally
+	# bad rivals instead of actual race performance ("overtaking, not
+	# winning"). Normalized to a 0..overtake_bonus fraction so it's a
+	# population-size-independent, strictly secondary bonus on top of
+	# progress, not something that can outweigh it.
 	for i in population_size:
 		var beaten := 0
 		for j in population_size:
 			if j != i and progress[i] > progress[j]:
 				beaten += 1
-		fitness[i] += beaten * overtake_bonus
+		fitness[i] += (float(beaten) / float(population_size - 1)) * overtake_bonus
 
 	var order := range(population_size)
 	order.sort_custom(func(a, b): return fitness[a] > fitness[b])
