@@ -14,6 +14,7 @@ const VehicleScene := preload("res://scenes/vehicle.tscn")
 @export var mutation_strength := 0.5
 @export var elite_count := 6
 @export var overtake_bonus := 2.0  # fitness per rival this genome out-progressed
+@export var reverse_penalty := 4.0  # per second spent with negative linear_speed
 
 var population: Array[Genome] = []
 var vehicles: Array[Vehicle] = []
@@ -74,6 +75,15 @@ func _physics_process(delta: float) -> void:
 		# Soft shaping: discourage hugging walls before they actually hit
 		if v.side_touching_wall():
 			penalty[i] += 1.0 * delta
+
+		# Braking/reversing near a wall is a cheap way to dodge the collision
+		# penalty below without actually learning to steer through -- diagnosed
+		# via scripts/tools/diagnose_race.gd, which showed input.z flipping
+		# negative exactly as a side ray closed in on a corner. Penalize actual
+		# reversing directly so evolution can't reward-hack a "panic brake"
+		# reflex instead of cornering.
+		if v.linear_speed < -0.02:
+			penalty[i] += reverse_penalty * delta
 
 		# Hard penalty: an actual physical collision with the track
 		if v.collision_count > prev_collisions[i]:
