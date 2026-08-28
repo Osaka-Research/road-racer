@@ -7,12 +7,12 @@ extends Node3D
 
 const VehicleScene := preload("res://scenes/vehicle.tscn")
 
-@export var population_size := 10
-@export var generations := 40
-@export var episode_seconds := 30.0
+@export var population_size := 24
+@export var generations := 150
+@export var episode_seconds := 40.0
 @export var mutation_rate := 0.12
 @export var mutation_strength := 0.5
-@export var elite_count := 3
+@export var elite_count := 6
 @export var overtake_bonus := 2.0  # fitness per rival this genome out-progressed
 
 var population: Array[Genome] = []
